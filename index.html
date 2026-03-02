@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>流体涂鸦 | 沉浸式解压小游戏</title>
+<style>
+/* 全局样式，适配Windows11高级质感 */
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; /* Windows11默认字体 */
+    background: #121212; /* 深灰底，更高级 */
+    overflow: hidden;
+    touch-action: none; /* 禁用触屏误触 */
+    background-image: radial-gradient(circle at center, rgba(30, 30, 30, 0.8) 0%, transparent 70%);
+}
+/* 画布容器（沉浸式全屏） */
+.canvas-container{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+}
+#fluidCanvas{
+    width: 100%;
+    height: 100%;
+    background: #121212;
+}
+/* 底部控制面板（Windows11毛玻璃+圆角） */
+.control-panel{
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    display: flex;
+    gap: 15px;
+    padding: 14px 24px;
+    background: rgba(255, 255, 255, 0.08); /* 淡透白 */
+    border-radius: 50px;
+    backdrop-filter: blur(16px); /* 高级毛玻璃 */
+    border: 1px solid rgba(255, 255, 255, 0.12); /* 细边框，更精致 */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); /* 柔化阴影 */
+}
+/* 控制按钮（带中文说明，hover动效升级） */
+.control-btn{
+    width: 65px;
+    height: 65px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* 丝滑过渡 */
+}
+.control-btn .icon{
+    font-size: 20px;
+    display: block;
+}
+.control-btn .text{
+    font-size: 12px;
+    opacity: 0.9;
+}
+.control-btn:hover{
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+}
+.control-btn.active{
+    background: #818cf8; /* 高级紫蓝色，适配Windows11 */
+    box-shadow: 0 0 25px rgba(129, 140, 248, 0.6);
+}
+/* 右侧风格选择器（更精致） */
+.style-selector{
+    position: fixed;
+    top: 50%;
+    right: 25px;
+    transform: translateY(-50%);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.style-btn{
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.style-btn:hover{
+    transform: scale(1.15);
+    border-color: #ffffff;
+}
+.style-btn.active{
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.8);
+}
+/* 新手指引遮罩（首次打开显示） */
+.guide-mask{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+.guide-content{
+    max-width: 80%;
+    text-align: center;
+    padding: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.guide-title{
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #818cf8;
+}
+.guide-list{
+    text-align: left;
+    margin-bottom: 30px;
+    line-height: 1.8;
+    font-size: 16px;
+}
+.guide-list li{
+    margin-bottom: 10px;
+    list-style: none;
+    padding-left: 10px;
+}
+.guide-list li::before{
+    content: "✨ ";
+    color: #feca57;
+}
+.guide-btn{
+    padding: 12px 30px;
+    background: #818cf8;
+    border: none;
+    border-radius: 50px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.guide-btn:hover{
+    background: #6366f1;
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+}
+/* 提示文字（更淡、更高级） */
+.hint{
+    position: fixed;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    animation: fade 8s forwards;
+}
+/* 淡入淡出动画（更丝滑） */
+@keyframes fade{
+    0%{opacity: 0; transform: translateX(-50%) translateY(10px);}
+    10%{opacity: 0.8; transform: translateX(-50%) translateY(0);}
+    80%{opacity: 0.8; transform: translateX(-50%) translateY(0);}
+    100%{opacity: 0; transform: translateX(-50%) translateY(10px);}
+}
+/* 适配Windows11平板/触控屏 */
+@media (max-width: 768px) {
+    .control-panel{
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    .control-btn{
+        width: 60px;
+        height: 60px;
+        font-size: 12px;
+    }
+    .control-btn .icon{
+        font-size: 18px;
+    }
+    .style-selector{
+        right: 15px;
+    }
+    .style-btn{
+        width: 38px;
+        height: 38px;
+    }
+    .guide-title{
+        font-size: 20px;
+    }
+    .guide-list{
+        font-size: 14px;
+    }
+}
+</style>
+</head>
+<body>
+<!-- 新手指引遮罩（首次打开显示） -->
+<div class="guide-mask" id="guideMask">
+    <div class="guide-content">
+        <div class="guide-title">🎉 欢迎来到流体涂鸦</div>
+        <ul class="guide-list">
+            <li>🎨 鼠标/手指滑动 = 绘制流体轨迹</li>
+            <li>🌈 右侧小圆点 = 切换4种颜色风格</li>
+            <li>🌀 清空画布 = 重置整个绘画区域</li>
+            <li>💾 保存作品 = 把画作存到电脑/手机</li>
+            <li>✏️ 画笔模式 = 流畅的流体绘画</li>
+            <li>💥 爆炸模式 = 点击/滑动出烟花特效</li>
+        </ul>
+        <button class="guide-btn" id="startBtn">开始创作 →</button>
+    </div>
+</div>
+
+<!-- 提示文字 -->
+<div class="hint">滑动画画｜点击放烟花｜右侧换颜色｜底部存图/清空</div>
+
+<!-- 画布 -->
+<div class="canvas-container">
+    <canvas id="fluidCanvas"></canvas>
+</div>
+
+<!-- 底部控制面板（带中文说明） -->
+<div class="control-panel">
+    <button class="control-btn" id="reset">
+        <span class="icon">🌀</span>
+        <span class="text">清空</span>
+    </button>
+    <button class="control-btn" id="save">
+        <span class="icon">💾</span>
+        <span class="text">保存</span>
+    </button>
+    <button class="control-btn active" id="draw">
+        <span class="icon">✏️</span>
+        <span class="text">画笔</span>
+    </button>
+    <button class="control-btn" id="boom">
+        <span class="icon">💥</span>
+        <span class="text">爆炸</span>
+    </button>
+</div>
+
+<!-- 右侧颜色风格选择 -->
+<div class="style-selector">
+    <button class="style-btn active" style="background:linear-gradient(45deg,#ff6b6b,#feca57)" title="暖色系"></button>
+    <button class="style-btn" style="background:linear-gradient(45deg,#48dbfb,#1dd1a1)" title="冷色系"></button>
+    <button class="style-btn" style="background:linear-gradient(45deg,#95e1d3,#f38181,#fce38a)" title="马卡龙"></button>
+    <button class="style-btn" style="background:linear-gradient(45deg,#6c5ce7,#a29bfe,#ffeaa7)" title="梦幻紫"></button>
+</div>
+
+<script>
+// 核心代码（不变，只新增新手指引逻辑）
+const canvas=document.getElementById('fluidCanvas');
+const ctx=canvas.getContext('2d');
+let isDraw=false,lastX=0,lastY=0,mode='draw',style=0;
+let particles=[];
+
+// 颜色方案（更柔和，适配高级界面）
+const colors=[
+['#ff6b6b','#feca57','#ff9ff3','#54a0ff','#5f27cd'], // 暖色系
+['#48dbfb','#1dd1a1','#00d2d3','#0abde3','#c8d6e5'], // 冷色系
+['#95e1d3','#f38181','#fce38a','#eaffd0','#99e2b4'], // 马卡龙
+['#6c5ce7','#a29bfe','#ffeaa7','#fd79a8','#fdcb6e']  // 梦幻紫
+];
+
+// 粒子类（流体核心，动效更细腻）
+class Particle{
+    constructor(x,y,s,c){
+        this.x=x;
+        this.y=y;
+        this.s=s; // 大小
+        this.c=c; // 颜色
+        this.vx=(Math.random()-.5)*2.5; // 水平速度
+        this.vy=(Math.random()-.5)*2.5; // 垂直速度
+        this.a=1; // 透明度
+        this.d=Math.random()*.005+.001; // 衰减速度
+    }
+    // 更新粒子位置和状态
+    update(){
+        this.x+=this.vx;
+        this.y+=this.vy;
+        this.a-=this.d;
+        this.vx*=.95; // 速度衰减，更自然
+        this.vy*=.95;
+        // 边界反弹
+        if(this.x<0||this.x>canvas.width)this.vx*=-.8;
+        if(this.y<0||this.y>canvas.height)this.vy*=-.8;
+    }
+    // 绘制粒子
+    draw(){
+        ctx.globalAlpha=this.a;
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.s,0,Math.PI*2);
+        ctx.fillStyle=this.c;
+        ctx.fill();
+    }
+}
+
+// 适配屏幕尺寸（Windows11不同分辨率都能完美显示）
+function resize(){
+    canvas.width=innerWidth;
+    canvas.height=innerHeight;
+}
+resize();
+window.addEventListener('resize',resize);
+
+// 添加粒子
+function add(x,y,s){
+    particles.push(new Particle(
+        x,y,s,
+        colors[style][Math.floor(Math.random()*colors[style].length)]
+    ));
+}
+
+// 绘制流体轨迹（更流畅）
+function line(x,y){
+    if(!isDraw)return;
+    const dx=x-lastX,dy=y-lastY;
+    const d=Math.hypot(dx,dy);
+    const n=Math.floor(d/5); // 粒子密度，更细腻
+    for(let i=0;i<n;i++){
+        const nx=lastX+dx*(i/n),ny=lastY+dy*(i/n);
+        add(nx,ny,Math.random()*6+2); // 粒子大小随机，更自然
+    }
+    lastX=x;
+    lastY=y;
+}
+
+// 爆炸效果（更华丽）
+function boom(x,y){
+    for(let i=0;i<50;i++){
+        const a=Math.random()*Math.PI*2;
+        const s=Math.random()*5+1;
+        const p=new Particle(x,y,s,colors[style][Math.floor(Math.random()*colors[style].length)]);
+        p.vx=Math.cos(a)*(Math.random()*5+2);
+        p.vy=Math.sin(a)*(Math.random()*5+2);
+        p.d=Math.random()*.008+.002;
+        particles.push(p);
+    }
+}
+
+// 动画循环（丝滑不卡顿）
+function anim(){
+    requestAnimationFrame(anim);
+    // 半透明背景，拖影效果更高级
+    ctx.fillStyle='rgba(18, 18, 18, 0.12)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    // 更新并绘制所有粒子，过滤掉透明粒子
+    particles=particles.filter(p=>{
+        p.update();
+        p.draw();
+        return p.a>.05;
+    })
+}
+anim();
+
+// 鼠标/触屏事件（适配Windows11鼠标和触控）
+function down(e){
+    isDraw=true;
+    const x=e.touches?e.touches[0].clientX:e.clientX;
+    const y=e.touches?e.touches[0].clientY:e.clientY;
+    lastX=x;
+    lastY=y;
+    if(mode==='boom')boom(x,y);
+    else add(x,y,Math.random()*10+5);
+}
+function move(e){
+    if(!isDraw)return;
+    e.preventDefault();
+    const x=e.touches?e.touches[0].clientX:e.clientX;
+    const y=e.touches?e.touches[0].clientY:e.clientY;
+    if(mode==='draw')line(x,y);
+    else boom(x,y);
+}
+function up(){
+    isDraw=false;
+}
+
+// 绑定事件
+canvas.addEventListener('mousedown',down);
+canvas.addEventListener('mousemove',move);
+canvas.addEventListener('mouseup',up);
+canvas.addEventListener('mouseleave',up);
+canvas.addEventListener('touchstart',down);
+canvas.addEventListener('touchmove',move);
+canvas.addEventListener('touchend',up);
+
+// 按钮功能（不变，适配新界面）
+document.getElementById('reset').onclick=()=>{
+    particles=[];
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+};
+document.getElementById('save').onclick=()=>{
+    const a=document.createElement('a');
+    a.download='流体涂鸦_'+new Date().getTime()+'.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+};
+document.getElementById('draw').onclick=()=>{
+    mode='draw';
+    document.querySelectorAll('.control-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('draw').classList.add('active');
+};
+document.getElementById('boom').onclick=()=>{
+    mode='boom';
+    document.querySelectorAll('.control-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('boom').classList.add('active');
+};
+document.querySelectorAll('.style-btn').forEach((b,i)=>{
+    b.onclick=()=>{
+        style=i;
+        document.querySelectorAll('.style-btn').forEach(s=>s.classList.remove('active'));
+        b.classList.add('active');
+    }
+});
+
+// 新手指引逻辑（首次打开显示，关闭后不再显示）
+const guideMask = document.getElementById('guideMask');
+const startBtn = document.getElementById('startBtn');
+
+// 检查是否首次打开
+if(localStorage.getItem('hasSeenGuide') !== 'true'){
+    guideMask.style.display = 'flex'; // 显示指引
+}else{
+    guideMask.style.display = 'none'; // 隐藏指引
+}
+
+// 点击开始创作，关闭指引并标记已查看
+startBtn.onclick = () => {
+    guideMask.style.display = 'none';
+    localStorage.setItem('hasSeenGuide', 'true'); // 本地存储，下次打开不显示
+};
+</script>
+</body>
+</html>
